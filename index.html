@@ -567,6 +567,7 @@
         </div>
         
         <!-- 게임 화면 -->
+
         <div id="gameScreen" style="display: none;">
             <canvas id="gameCanvas" width="1280" height="760"></canvas>
             <div id="touchControls">
@@ -770,6 +771,7 @@
         };
 
         let mobileControlsInitialized = false;
+
         
         // 플레이어
         const player = {
@@ -1077,6 +1079,7 @@
             updateStartButton();
         }
         
+
         function updateStartButton() {
             const canStart = gameState.environment && gameState.selectedDestination && gameState.selectedCargos.length > 0;
             const startBtn = document.getElementById('startMissionBtn');
@@ -1261,7 +1264,7 @@
                 alert('목적지와 화물을 선택해주세요!');
                 return;
             }
-            
+           
             console.log('배송 미션 시작!');
             
             if (!audioContext) {
@@ -2150,4 +2153,5 @@
         updateEnvIndicator();
     </script>
 </body>
+
 </html>
