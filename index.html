@@ -381,6 +381,13 @@
                             업그레이드 (<span id="cargoUpgradeCost">10</span>💎)
                         </button>
                     </div>
+                    <div style="background: rgba(0, 100, 150, 0.3); padding: 10px; border-radius: 8px; border: 1px solid #0088ff;">
+                        <div style="font-weight: bold; color: #00ffff;">💣 기뢰 시스템</div>
+                        <div style="font-size: 12px; color: #ccc;">보유: <span id="mineUpgradeOwned">아니오</span></div>
+                        <button class="prep-button" onclick="unlockMines()" style="width: 100%; margin-top: 5px;">
+                            업그레이드 (<span id="mineUpgradeCost">20</span>💎)
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -682,6 +689,8 @@
             shipSpeedLevel: 1,
             maxTurretLevel: 1,
             cargoCapacityLevel: 1,
+            mineLevel: 0,
+            lastMineTime: 0,
             // 선택된 화물과 목적지
             selectedCargos: [],
             selectedDestination: null
@@ -702,9 +711,11 @@
         // 게임 객체들
         let bullets = [];
         let turretBullets = [];
+        let enemyBullets = [];
         let enemies = [];
         let explosions = [];
         let stars = [];
+        let mines = [];
         let gameLoopRunning = false;
         
         // 오디오 컨텍스트
@@ -1027,7 +1038,17 @@
                 updatePrepUI();
             }
         }
-        
+
+        function unlockMines() {
+            const cost = 20;
+            if (gameState.diamonds >= cost && gameState.mineLevel === 0) {
+                gameState.diamonds -= cost;
+                gameState.mineLevel = 1;
+                playUpgradeSound();
+                updatePrepUI();
+            }
+        }
+
         function updatePrepUI() {
             document.getElementById('prepGold').textContent = gameState.gold;
             document.getElementById('prepDiamonds').textContent = gameState.diamonds;
@@ -1048,23 +1069,28 @@
             document.getElementById('maxTurrets').textContent = getMaxTurretCount();
             document.getElementById('cargoCapacityLevel').textContent = gameState.cargoCapacityLevel;
             document.getElementById('cargoSlotBonus').textContent = getMaxCargoSlots() - 2;
-            
+            document.getElementById('mineUpgradeOwned').textContent = gameState.mineLevel > 0 ? '예' : '아니오';
+
             const speedCost = 5 + (gameState.shipSpeedLevel - 1) * 3;
             const turretCost = 8 + (gameState.maxTurretLevel - 1) * 5;
             const cargoCost = 10 + (gameState.cargoCapacityLevel - 1) * 7;
-            
+            const mineCost = 20;
+
             document.getElementById('speedUpgradeCost').textContent = speedCost;
             document.getElementById('turretUpgradeCost').textContent = turretCost;
             document.getElementById('cargoUpgradeCost').textContent = cargoCost;
-            
+            document.getElementById('mineUpgradeCost').textContent = mineCost;
+
             const speedBtn = document.querySelector('[onclick="upgradeShipSpeed()"]');
             const turretBtn = document.querySelector('[onclick="upgradeMaxTurrets()"]');
             const cargoBtn = document.querySelector('[onclick="upgradeCargoCapacity()"]');
-            
+            const mineBtn = document.querySelector('[onclick="unlockMines()"]');
+
             if (speedBtn) speedBtn.disabled = gameState.diamonds < speedCost;
             if (turretBtn) turretBtn.disabled = gameState.diamonds < turretCost;
             if (cargoBtn) cargoBtn.disabled = gameState.diamonds < cargoCost;
-            
+            if (mineBtn) mineBtn.disabled = gameState.diamonds < mineCost || gameState.mineLevel > 0;
+
             updateCargoUI();
         }
         
@@ -1125,7 +1151,14 @@
                 card.style.opacity = '1';
                 card.style.cursor = 'pointer';
             });
-            
+
+            bullets = [];
+            turretBullets = [];
+            enemyBullets = [];
+            enemies = [];
+            explosions = [];
+            mines = [];
+
             updatePrepUI();
         }
         
@@ -1194,9 +1227,12 @@
             
             bullets = [];
             turretBullets = [];
+            enemyBullets = [];
             enemies = [];
             explosions = [];
-            
+            mines = [];
+            gameState.lastMineTime = 0;
+
             if (stars.length === 0) createStars();
         }
         
@@ -1335,7 +1371,20 @@
                 gameState.keys[e.key.toLowerCase()] = false;
             }
         });
-        
+
+        canvas.addEventListener('click', (e) => {
+            if (gameState.inGame && gameState.mineLevel > 0) {
+                const now = Date.now();
+                if (now - gameState.lastMineTime > 1000) {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    mines.push({ x, y, radius: 10 });
+                    gameState.lastMineTime = now;
+                }
+            }
+        });
+
         function shoot() {
             if (!gameState.gameOver && !gameState.stageComplete) {
                 bullets.push({
@@ -1379,11 +1428,38 @@
                     }
                 }
                 
-                const difficultyBonus = destination.difficulty - 1;
-                const enemyType = Math.random() + difficultyBonus * 0.2;
+                const roll = Math.random();
                 let enemy;
-                
-                if (enemyType < 0.6) {
+
+                if (gameState.stage >= 3 && roll > 0.95) {
+                    enemy = {
+                        x: enemyX,
+                        y: enemyY,
+                        width: 60,
+                        height: 60,
+                        speed: (0.5 + gameState.stage * 0.1) * destination.difficulty,
+                        color: '#00aaff',
+                        type: 'carrier',
+                        hp: Math.ceil(15 * destination.difficulty + gameState.stage * 5),
+                        maxHp: Math.ceil(15 * destination.difficulty + gameState.stage * 5),
+                        goldValue: 50 + gameState.stage * 5,
+                        lastSpawn: now
+                    };
+                } else if (gameState.stage >= 2 && roll > 0.85) {
+                    enemy = {
+                        x: enemyX,
+                        y: enemyY,
+                        width: 40,
+                        height: 40,
+                        speed: (1 + gameState.stage * 0.1) * destination.difficulty,
+                        color: '#00ff00',
+                        type: 'cruiser',
+                        hp: Math.ceil(5 * destination.difficulty + gameState.stage),
+                        maxHp: Math.ceil(5 * destination.difficulty + gameState.stage),
+                        goldValue: 25 + gameState.stage * 3,
+                        lastShot: now
+                    };
+                } else if (roll < 0.6) {
                     enemy = {
                         x: enemyX,
                         y: enemyY,
@@ -1396,7 +1472,7 @@
                         maxHp: 1,
                         goldValue: 5 + gameState.stage
                     };
-                } else if (enemyType < 0.85) {
+                } else if (roll < 0.85) {
                     enemy = {
                         x: enemyX,
                         y: enemyY,
@@ -1447,6 +1523,14 @@
                    rect1.y < rect2.y + rect2.height &&
                    rect1.y + rect1.height > rect2.y;
         }
+
+        function getScoreValue(enemy, fromTurret = false) {
+            if (enemy.type === 'fast') return fromTurret ? 25 : 20;
+            if (enemy.type === 'strong') return fromTurret ? 20 : 15;
+            if (enemy.type === 'cruiser') return fromTurret ? 35 : 30;
+            if (enemy.type === 'carrier') return fromTurret ? 55 : 50;
+            return fromTurret ? 15 : 10;
+        }
         
         function updatePlayer() {
             if (gameState.keys['a'] || gameState.keys['arrowleft']) {
@@ -1472,22 +1556,64 @@
             turretBullets = turretBullets.filter(bullet => {
                 bullet.x += bullet.vx;
                 bullet.y += bullet.vy;
-                return bullet.x > -50 && bullet.x < canvas.width + 50 && 
+               return bullet.x > -50 && bullet.x < canvas.width + 50 &&
+                       bullet.y > -50 && bullet.y < canvas.height + 50;
+            });
+        }
+
+        function updateEnemyBullets() {
+            enemyBullets = enemyBullets.filter(bullet => {
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                return bullet.x > -50 && bullet.x < canvas.width + 50 &&
                        bullet.y > -50 && bullet.y < canvas.height + 50;
             });
         }
         
         function updateEnemies() {
+            const now = Date.now();
             enemies = enemies.filter(enemy => {
                 const dx = player.x + player.width/2 - enemy.x;
                 const dy = player.y + player.height/2 - enemy.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
+
                 if (distance > 0) {
                     enemy.x += (dx / distance) * enemy.speed;
                     enemy.y += (dy / distance) * enemy.speed;
                 }
-                
+
+                if (enemy.type === 'carrier') {
+                    if (now - enemy.lastSpawn > 2000) {
+                        enemies.push({
+                            x: enemy.x + enemy.width/2,
+                            y: enemy.y + enemy.height/2,
+                            width: 20,
+                            height: 20,
+                            speed: 2 + gameState.stage * 0.2,
+                            color: '#ffaa00',
+                            type: 'drone',
+                            hp: 1,
+                            maxHp: 1,
+                            goldValue: 5 + gameState.stage
+                        });
+                        enemy.lastSpawn = now;
+                    }
+                } else if (enemy.type === 'cruiser') {
+                    if (now - enemy.lastShot > 1500) {
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        enemyBullets.push({
+                            x: enemy.x + enemy.width/2,
+                            y: enemy.y + enemy.height/2,
+                            vx: (dx / dist) * 4,
+                            vy: (dy / dist) * 4,
+                            width: 6,
+                            height: 6,
+                            color: '#ff4444'
+                        });
+                        enemy.lastShot = now;
+                    }
+                }
+
                 if (checkCollision(player, enemy)) {
                     createExplosion(enemy.x + enemy.width/2, enemy.y + enemy.height/2);
                     playHitSound();
@@ -1499,23 +1625,41 @@
                     return false;
                 }
                 
-                return enemy.x > -100 && enemy.x < canvas.width + 100 && 
+                return enemy.x > -100 && enemy.x < canvas.width + 100 &&
                        enemy.y > -100 && enemy.y < canvas.height + 100;
             });
         }
-        
+
+        function updateMines() {
+            mines = mines.filter(mine => {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const enemy = enemies[i];
+                    const dx = enemy.x + enemy.width/2 - mine.x;
+                    const dy = enemy.y + enemy.height/2 - mine.y;
+                    if (Math.sqrt(dx * dx + dy * dy) < 20) {
+                        createExplosion(mine.x, mine.y);
+                        playExplosionSound();
+                        gameState.score += getScoreValue(enemy);
+                        gameState.gold += enemy.goldValue;
+                        enemies.splice(i, 1);
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
+
         function checkBulletEnemyCollisions() {
             for (let i = bullets.length - 1; i >= 0; i--) {
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     if (checkCollision(bullets[i], enemies[j])) {
                         enemies[j].hp -= 1;
                         bullets.splice(i, 1);
-                        
+
                         if (enemies[j].hp <= 0) {
                             createExplosion(enemies[j].x + enemies[j].width/2, enemies[j].y + enemies[j].height/2);
                             playExplosionSound();
-                            gameState.score += enemies[j].type === 'fast' ? 20 : 
-                                              enemies[j].type === 'strong' ? 15 : 10;
+                            gameState.score += getScoreValue(enemies[j]);
                             gameState.gold += enemies[j].goldValue;
                             enemies.splice(j, 1);
                         }
@@ -1529,15 +1673,47 @@
                     if (checkCollision(turretBullets[i], enemies[j])) {
                         enemies[j].hp -= turretBullets[i].damage;
                         turretBullets.splice(i, 1);
-                        
+
                         if (enemies[j].hp <= 0) {
                             createExplosion(enemies[j].x + enemies[j].width/2, enemies[j].y + enemies[j].height/2);
                             playExplosionSound();
-                            gameState.score += enemies[j].type === 'fast' ? 25 : 
-                                              enemies[j].type === 'strong' ? 20 : 15;
+                            gameState.score += getScoreValue(enemies[j], true);
                             gameState.gold += enemies[j].goldValue + 2;
                             enemies.splice(j, 1);
                         }
+                        break;
+                    }
+                }
+            }
+
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                if (checkCollision(enemyBullets[i], player)) {
+                    createExplosion(enemyBullets[i].x, enemyBullets[i].y);
+                    playHitSound();
+                    gameState.lives--;
+                    enemyBullets.splice(i, 1);
+                    if (gameState.lives <= 0) {
+                        gameState.gameOver = true;
+                        showGameOver();
+                    }
+                    continue;
+                }
+                let destroyed = false;
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    if (checkCollision(enemyBullets[i], bullets[j])) {
+                        createExplosion(enemyBullets[i].x, enemyBullets[i].y);
+                        bullets.splice(j, 1);
+                        enemyBullets.splice(i, 1);
+                        destroyed = true;
+                        break;
+                    }
+                }
+                if (destroyed) continue;
+                for (let j = turretBullets.length - 1; j >= 0; j--) {
+                    if (checkCollision(enemyBullets[i], turretBullets[j])) {
+                        createExplosion(enemyBullets[i].x, enemyBullets[i].y);
+                        turretBullets.splice(j, 1);
+                        enemyBullets.splice(i, 1);
                         break;
                     }
                 }
@@ -1713,6 +1889,20 @@
                 ctx.fill();
                 ctx.shadowBlur = 0;
             });
+
+            enemyBullets.forEach(bullet => {
+                ctx.fillStyle = bullet.color;
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            });
+        }
+
+        function drawMines() {
+            mines.forEach(mine => {
+                ctx.fillStyle = '#aaaa00';
+                ctx.beginPath();
+                ctx.arc(mine.x, mine.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            });
         }
         
         function drawEnemies() {
@@ -1793,7 +1983,9 @@
                 updateStars();
                 updatePlayer();
                 updateBullets();
+                updateEnemyBullets();
                 updateEnemies();
+                updateMines();
                 updateExplosions();
                 updateTurrets();
                 updateStageTimer();
@@ -1805,6 +1997,7 @@
             drawStars();
             drawPlayer();
             drawBullets();
+            drawMines();
             drawEnemies();
             drawExplosions();
             
