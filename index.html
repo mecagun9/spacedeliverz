@@ -1073,9 +1073,11 @@
             return isMobile ? 'MB' : 'PC';
         }
 
+
         function updateEnvIndicator() {
+            const envText = gameState.environment ? (gameState.environment === 'pc' ? 'PC' : 'MB') : '--';
             const indicator = document.getElementById('envIndicator');
-            if (indicator) indicator.textContent = `${getBrowserAbbrev()}/${getPlatformAbbrev()}`;
+            if (indicator) indicator.textContent = `${getBrowserAbbrev()}/${envText}`;
         }
 
         function applyEnvironment(env) {
