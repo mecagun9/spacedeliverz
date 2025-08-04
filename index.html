@@ -1067,6 +1067,13 @@
             return 'OT';
         }
 
+        function getPlatformAbbrev() {
+            const ua = navigator.userAgent;
+            const isMobile = /Mobi|Android|iPhone|iPad/i.test(ua);
+            return isMobile ? 'MB' : 'PC';
+        }
+
+
         function updateEnvIndicator() {
             const envText = gameState.environment ? (gameState.environment === 'pc' ? 'PC' : 'MB') : '--';
             const indicator = document.getElementById('envIndicator');
