@@ -128,7 +128,10 @@
             font-size: 16px;
             display: flex;
             justify-content: space-between;
-            width: 1280px;
+            width: 100%;
+            max-width: 1280px;
+            flex-wrap: wrap;
+            gap: 5px;
         }
         
         .upgrade-btn {
@@ -270,9 +273,43 @@
         button:hover {
             background: #00dddd;
         }
+
+        #envIndicator {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 3px 6px;
+            font-size: 12px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+
+        #touchControls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            display: none;
+        }
+
+        #touchControls button {
+            width: 50px;
+            height: 50px;
+            margin: 5px;
+            font-size: 20px;
+            opacity: 0.7;
+        }
+
+        #touchControls #btn-fire {
+            position: absolute;
+            right: -80px;
+            bottom: 0;
+        }
     </style>
 </head>
 <body>
+    <div id="envIndicator"></div>
     <div id="gameContainer">
         <!-- 준비 화면 -->
         <div id="prepScreen">
@@ -351,11 +388,22 @@
             </div>
             
             <div class="prep-header">미션 준비 - 스테이지 <span id="prepStage">1</span></div>
-            
+
             <div class="prep-section">
                 <div class="section-title">💼 현재 골드: <span id="prepGold">100</span> | 💎 다이아: <span id="prepDiamonds">0</span></div>
             </div>
-            
+
+            <div class="prep-section">
+                <div class="section-title">🖥️ 환경 선택</div>
+                <div style="display: flex; justify-content: center; gap: 10px;">
+                    <button class="prep-button" onclick="applyEnvironment('pc')">PC 해상도</button>
+                    <button class="prep-button" onclick="applyEnvironment('mobile')">모바일 해상도</button>
+                </div>
+                <div style="text-align: center; margin-top: 5px; font-size: 14px;">
+                    선택된 환경: <span id="selectedEnvDisplay">없음</span>
+                </div>
+            </div>
+
             <!-- 영구 업그레이드 -->
             <div class="prep-section">
                 <div class="section-title">🔧 우주선 영구 업그레이드 (다이아)</div>
@@ -508,6 +556,17 @@
         <!-- 게임 화면 -->
         <div id="gameScreen" style="display: none;">
             <canvas id="gameCanvas" width="1280" height="760"></canvas>
+            <div id="touchControls">
+                <div>
+                    <button id="btn-up">▲</button>
+                </div>
+                <div>
+                    <button id="btn-left">◀</button>
+                    <button id="btn-down">▼</button>
+                    <button id="btn-right">▶</button>
+                </div>
+                <button id="btn-fire">🔥</button>
+            </div>
             <div id="gameInfo">
                 <span>점수: <span id="score">0</span></span>
                 <span>💰 골드: <span id="gold">100</span></span>
@@ -693,8 +752,11 @@
             lastMineTime: 0,
             // 선택된 화물과 목적지
             selectedCargos: [],
-            selectedDestination: null
+            selectedDestination: null,
+            environment: null
         };
+
+        let mobileControlsInitialized = false;
         
         // 플레이어
         const player = {
@@ -989,11 +1051,71 @@
         }
         
         function updateStartButton() {
-            const canStart = gameState.selectedDestination && gameState.selectedCargos.length > 0;
+            const canStart = gameState.environment && gameState.selectedDestination && gameState.selectedCargos.length > 0;
             const startBtn = document.getElementById('startMissionBtn');
             if (startBtn) {
                 startBtn.disabled = !canStart;
             }
+        }
+
+        function getBrowserAbbrev() {
+            const ua = navigator.userAgent;
+            if (ua.includes('Chrome') && !ua.includes('Edge') && !ua.includes('OPR')) return 'CH';
+            if (ua.includes('Safari') && !ua.includes('Chrome')) return 'SA';
+            if (ua.includes('Firefox')) return 'FF';
+            if (ua.includes('Edg') || ua.includes('Edge')) return 'ED';
+            return 'OT';
+        }
+
+        function getPlatformAbbrev() {
+            const ua = navigator.userAgent;
+            const isMobile = /Mobi|Android|iPhone|iPad/i.test(ua);
+            return isMobile ? 'MB' : 'PC';
+        }
+
+        function updateEnvIndicator() {
+            const indicator = document.getElementById('envIndicator');
+            if (indicator) indicator.textContent = `${getBrowserAbbrev()}/${getPlatformAbbrev()}`;
+        }
+
+        function applyEnvironment(env) {
+            gameState.environment = env;
+            if (env === 'pc') {
+                canvas.width = 1280;
+                canvas.height = 760;
+                document.getElementById('touchControls').style.display = 'none';
+            } else if (env === 'mobile') {
+                canvas.width = 800;
+                canvas.height = 450;
+                setupMobileControls();
+            }
+            document.getElementById('gameInfo').style.width = canvas.width + 'px';
+            document.getElementById('selectedEnvDisplay').textContent = env === 'pc' ? 'PC' : '모바일';
+            updateEnvIndicator();
+            updateStartButton();
+        }
+
+        function setupMobileControls() {
+            const controls = document.getElementById('touchControls');
+            controls.style.display = 'block';
+            if (mobileControlsInitialized) return;
+            mobileControlsInitialized = true;
+            const map = {
+                'btn-left': 'arrowleft',
+                'btn-right': 'arrowright',
+                'btn-up': 'arrowup',
+                'btn-down': 'arrowdown'
+            };
+            Object.keys(map).forEach(id => {
+                const key = map[id];
+                const btn = document.getElementById(id);
+                btn.addEventListener('touchstart', e => { e.preventDefault(); gameState.keys[key] = true; });
+                const end = e => { e.preventDefault(); gameState.keys[key] = false; };
+                btn.addEventListener('touchend', end);
+                btn.addEventListener('touchcancel', end);
+            });
+            const fireBtn = document.getElementById('btn-fire');
+            fireBtn.addEventListener('touchstart', e => { e.preventDefault(); shoot(); });
         }
         
         // 영구 업그레이드 함수들
@@ -1053,6 +1175,7 @@
             document.getElementById('prepGold').textContent = gameState.gold;
             document.getElementById('prepDiamonds').textContent = gameState.diamonds;
             document.getElementById('prepStage').textContent = gameState.stage;
+            document.getElementById('selectedEnvDisplay').textContent = gameState.environment ? (gameState.environment === 'pc' ? 'PC' : '모바일') : '없음';
             
             if (gameState.selectedDestination) {
                 const dest = DESTINATIONS[gameState.selectedDestination];
@@ -1092,9 +1215,14 @@
             if (mineBtn) mineBtn.disabled = gameState.diamonds < mineCost || gameState.mineLevel > 0;
 
             updateCargoUI();
+            updateStartButton();
         }
         
         function startMission() {
+            if (!gameState.environment) {
+                alert('환경을 선택해주세요!');
+                return;
+            }
             if (!gameState.selectedDestination || gameState.selectedCargos.length === 0) {
                 alert('목적지와 화물을 선택해주세요!');
                 return;
@@ -1139,10 +1267,17 @@
             document.getElementById('gameScreen').style.display = 'none';
             document.getElementById('gameOverScreen').style.display = 'none';
             document.getElementById('stageCompleteScreen').style.display = 'none';
-            
+
             gameState.inGame = false;
             gameState.gameOver = false;
-            
+            gameState.environment = null;
+            document.getElementById('touchControls').style.display = 'none';
+            canvas.width = 1280;
+            canvas.height = 760;
+            document.getElementById('gameInfo').style.width = canvas.width + 'px';
+            updateEnvIndicator();
+            updateStartButton();
+
             document.querySelectorAll('.destination-card').forEach(card => {
                 card.classList.remove('selected');
             });
@@ -2008,6 +2143,7 @@
         
         // 초기화
         updatePrepUI();
+        updateEnvIndicator();
     </script>
 </body>
 </html>
