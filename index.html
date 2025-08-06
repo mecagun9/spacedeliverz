@@ -285,6 +285,18 @@
             z-index: 1000;
         }
 
+        #resolutionInfo {
+            position: fixed;
+            bottom: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 3px 6px;
+            font-size: 12px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+
         #touchControls {
             position: absolute;
             bottom: 20px;
@@ -310,6 +322,7 @@
 </head>
 <body>
     <div id="envIndicator"></div>
+    <div id="resolutionInfo">PC 해상도: 1280x760 | 모바일 해상도: 800x450</div>
     <div id="gameContainer">
         <!-- 준비 화면 -->
         <div id="prepScreen">
@@ -554,6 +567,7 @@
         </div>
         
         <!-- 게임 화면 -->
+
         <div id="gameScreen" style="display: none;">
             <canvas id="gameCanvas" width="1280" height="760"></canvas>
             <div id="touchControls">
@@ -757,6 +771,7 @@
         };
 
         let mobileControlsInitialized = false;
+
         
         // 플레이어
         const player = {
@@ -769,6 +784,20 @@
             color: '#00ffff',
             turrets: []
         };
+
+        const TURRET_POSITIONS = [
+            { x: 0, y: -20 },
+            { x: -40, y: -10 },
+            { x: 40, y: -10 },
+            { x: -60, y: 0 },
+            { x: 60, y: 0 },
+            { x: -80, y: 10 },
+            { x: 80, y: 10 },
+            { x: -100, y: 20 },
+            { x: 100, y: 20 },
+            { x: -120, y: 30 },
+            { x: 120, y: 30 }
+        ];
         
         // 게임 객체들
         let bullets = [];
@@ -1050,6 +1079,7 @@
             updateStartButton();
         }
         
+
         function updateStartButton() {
             const canStart = gameState.environment && gameState.selectedDestination && gameState.selectedCargos.length > 0;
             const startBtn = document.getElementById('startMissionBtn');
@@ -1073,25 +1103,30 @@
             return isMobile ? 'MB' : 'PC';
         }
 
-
         function updateEnvIndicator() {
-            const envText = gameState.environment ? (gameState.environment === 'pc' ? 'PC' : 'MB') : '--';
             const indicator = document.getElementById('envIndicator');
-            if (indicator) indicator.textContent = `${getBrowserAbbrev()}/${envText}`;
+            if (indicator) indicator.textContent = `${getBrowserAbbrev()}/${getPlatformAbbrev()}`;
+        }
+
+        function setCanvasResolution(width, height) {
+            canvas.width = width;
+            canvas.height = height;
+            document.getElementById('gameInfo').style.width = width + 'px';
+        }
+
+        function toggleTouchControls(show) {
+            document.getElementById('touchControls').style.display = show ? 'block' : 'none';
         }
 
         function applyEnvironment(env) {
             gameState.environment = env;
             if (env === 'pc') {
-                canvas.width = 1280;
-                canvas.height = 760;
-                document.getElementById('touchControls').style.display = 'none';
+                setCanvasResolution(1280, 760);
+                toggleTouchControls(false);
             } else if (env === 'mobile') {
-                canvas.width = 800;
-                canvas.height = 450;
+                setCanvasResolution(800, 450);
                 setupMobileControls();
             }
-            document.getElementById('gameInfo').style.width = canvas.width + 'px';
             document.getElementById('selectedEnvDisplay').textContent = env === 'pc' ? 'PC' : '모바일';
             updateEnvIndicator();
             updateStartButton();
@@ -1229,7 +1264,7 @@
                 alert('목적지와 화물을 선택해주세요!');
                 return;
             }
-            
+           
             console.log('배송 미션 시작!');
             
             if (!audioContext) {
@@ -1273,10 +1308,8 @@
             gameState.inGame = false;
             gameState.gameOver = false;
             gameState.environment = null;
-            document.getElementById('touchControls').style.display = 'none';
-            canvas.width = 1280;
-            canvas.height = 760;
-            document.getElementById('gameInfo').style.width = canvas.width + 'px';
+            toggleTouchControls(false);
+            setCanvasResolution(1280, 760);
             updateEnvIndicator();
             updateStartButton();
 
@@ -1334,27 +1367,13 @@
             
             player.turrets = [];
             for (let i = 0; i < gameState.turretCount; i++) {
-                const positions = [
-                    { x: 0, y: -20 },
-                    { x: -40, y: -10 },
-                    { x: 40, y: -10 },
-                    { x: -60, y: 0 },
-                    { x: 60, y: 0 },
-                    { x: -80, y: 10 },
-                    { x: 80, y: 10 },
-                    { x: -100, y: 20 },
-                    { x: 100, y: 20 },
-                    { x: -120, y: 30 },
-                    { x: 120, y: 30 }
-                ];
-                
-                if (i < positions.length) {
+                if (i < TURRET_POSITIONS.length) {
                     const baseFireRate = Math.max(100, 500 - (gameState.speedLevel - 1) * 50);
                     const finalFireRate = baseFireRate / fireRateMultiplier;
-                    
+
                     player.turrets.push({
-                        x: positions[i].x,
-                        y: positions[i].y,
+                        x: TURRET_POSITIONS[i].x,
+                        y: TURRET_POSITIONS[i].y,
                         lastShot: 0,
                         fireRate: finalFireRate,
                         damage: gameState.damageLevel * damageMultiplier
@@ -1379,26 +1398,12 @@
                 gameState.gold -= 100;
                 gameState.turretCount++;
                 playUpgradeSound();
-                
-                const positions = [
-                    { x: 0, y: -20 },
-                    { x: -40, y: -10 },
-                    { x: 40, y: -10 },
-                    { x: -60, y: 0 },
-                    { x: 60, y: 0 },
-                    { x: -80, y: 10 },
-                    { x: 80, y: 10 },
-                    { x: -100, y: 20 },
-                    { x: 100, y: 20 },
-                    { x: -120, y: 30 },
-                    { x: 120, y: 30 }
-                ];
-                
-                if (player.turrets.length < positions.length) {
+
+                if (player.turrets.length < TURRET_POSITIONS.length) {
                     const fireRate = Math.max(100, 500 - (gameState.speedLevel - 1) * 50);
                     player.turrets.push({
-                        x: positions[player.turrets.length].x,
-                        y: positions[player.turrets.length].y,
+                        x: TURRET_POSITIONS[player.turrets.length].x,
+                        y: TURRET_POSITIONS[player.turrets.length].y,
                         lastShot: 0,
                         fireRate: fireRate,
                         damage: gameState.damageLevel
@@ -2148,4 +2153,5 @@
         updateEnvIndicator();
     </script>
 </body>
+
 </html>
